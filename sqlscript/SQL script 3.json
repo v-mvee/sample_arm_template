@@ -1,0 +1,17 @@
+{
+	"name": "SQL script 3",
+	"properties": {
+		"content": {
+			"query": "CREATE TABLE [mtd].[config_table]\n(\n    source_file_name VARCHAR(200) NOT NULL,\n    target_schema_name VARCHAR(50) NOT NULL,\n    target_table_name VARCHAR(50) NOT NULL,\n    enable_flag BIT NOT NULL\n)\nGO\n\nINSERT INTO [mtd].[config_table] \n(\n    source_file_name, \n    target_schema_name, \n    target_table_name, \n    enable_flag\n)\nSELECT 'customers-1000.csv','adls','customers',1 UNION ALL\nSELECT 'leads-1000.csv','adls','leads',1 UNION ALL\nSELECT 'organizations-1000.csv','adls','organizations',1 UNION ALL\nSELECT 'people-1000.csv','adls','people',1;\n\n\n",
+			"metadata": {
+				"language": "sql"
+			},
+			"currentConnection": {
+				"databaseName": "synapsededipool",
+				"poolName": "synapsededipool"
+			},
+			"resultLimit": 5000
+		},
+		"type": "SqlQuery"
+	}
+}

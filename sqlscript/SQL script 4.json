@@ -1,0 +1,17 @@
+{
+	"name": "SQL script 4",
+	"properties": {
+		"content": {
+			"query": "INSERT INTO [mtd].[config_table] \n(\n    source_file_name, \n    target_schema_name, \n    target_table_name, \n    enable_flag\n)\nSELECT 'customers-1000.csv','adls','customers',1 UNION ALL\nSELECT 'leads-1000.csv','adls','leads',1 UNION ALL\nSELECT 'organizations-1000.csv','adls','organizations',1 UNION ALL\nSELECT 'people-1000.csv','adls','people',1;\n",
+			"metadata": {
+				"language": "sql"
+			},
+			"currentConnection": {
+				"databaseName": "synapsededipool",
+				"poolName": "synapsededipool"
+			},
+			"resultLimit": 5000
+		},
+		"type": "SqlQuery"
+	}
+}

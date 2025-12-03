@@ -1,0 +1,17 @@
+{
+	"name": "SQL script 1",
+	"properties": {
+		"content": {
+			"query": "-- Drop the table if it exists\nIF OBJECT_ID('dbo.demo_table_1') IS NOT NULL\n    DROP TABLE dbo.demo_table_1;\nGO\n\n-- Create the table using CTAS (CREATE TABLE AS SELECT)\nCREATE TABLE dbo.demo_table_1\nWITH\n(\n    DISTRIBUTION = ROUND_ROBIN,\n    HEAP\n)\nAS\nSELECT TOP (10000000)\n    ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS id,\n    ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) * 10 AS col_int,\n    (ROW_NUMBER() OVER (ORDER BY (SELECT NULL))) % 32767 AS col_smallint,\n    CAST(ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) * 1.1 AS DECIMAL(10,2)) AS col_dec,\n    CONCAT('name_', ROW_NUMBER() OVER (ORDER BY (SELECT NULL))) AS col_vc,\n    CASE WHEN (ROW_NUMBER() OVER (ORDER BY (SELECT NULL))) % 2 = 0 THEN 'Y' ELSE 'N' END AS col_flag,\n    DATEADD(DAY, ROW_NUMBER() OVER (ORDER BY (SELECT NULL)), '2000-01-01') AS col_date,\n    DATEADD(SECOND, ROW_NUMBER() OVER (ORDER BY (SELECT NULL)), '2000-01-01T00:00:00') AS col_dt,\n    (ROW_NUMBER() OVER (ORDER BY (SELECT NULL))) * 100 AS col_bigint,\n    GETDATE() AS col_datetime\nFROM sys.all_objects AS a\nCROSS JOIN sys.all_objects AS b;\nGO\n",
+			"metadata": {
+				"language": "sql"
+			},
+			"currentConnection": {
+				"databaseName": "synapsededipool",
+				"poolName": "synapsededipool"
+			},
+			"resultLimit": 5000
+		},
+		"type": "SqlQuery"
+	}
+}
