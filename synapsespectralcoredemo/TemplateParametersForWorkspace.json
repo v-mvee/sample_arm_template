@@ -1,0 +1,24 @@
+{
+	"$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentParameters.json#",
+	"contentVersion": "1.0.0.0",
+	"parameters": {
+		"workspaceName": {
+			"value": "synapsespectralcoredemo"
+		},
+		"adls_spectralcore_accountKey": {
+			"value": ""
+		},
+		"synapsespectralcoredemo-WorkspaceDefaultSqlServer_connectionString": {
+			"value": "Integrated Security=False;Encrypt=True;Connection Timeout=30;Data Source=tcp:synapsespectralcoredemo.sql.azuresynapse.net,1433;Initial Catalog=@{linkedService().DBName}"
+		},
+		"adls_spectralcore_properties_typeProperties_url": {
+			"value": "https://adlsspectralcore.dfs.core.windows.net/"
+		},
+		"bing-covid-19-data_sasUri": {
+			"value": ""
+		},
+		"synapsespectralcoredemo-WorkspaceDefaultStorage_properties_typeProperties_url": {
+			"value": "https://adlssynapsesameerkul.dfs.core.windows.net"
+		}
+	}
+}

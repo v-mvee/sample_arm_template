@@ -1,0 +1,514 @@
+{
+	"$schema": "http://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+	"contentVersion": "1.0.0.0",
+	"parameters": {
+		"workspaceName": {
+			"type": "string",
+			"metadata": "Workspace name",
+			"defaultValue": "synapsespectralcoredemo"
+		},
+		"adls_spectralcore_accountKey": {
+			"type": "secureString",
+			"metadata": "Secure string for 'accountKey' of 'adls_spectralcore'"
+		},
+		"synapsespectralcoredemo-WorkspaceDefaultSqlServer_connectionString": {
+			"type": "secureString",
+			"metadata": "Secure string for 'connectionString' of 'synapsespectralcoredemo-WorkspaceDefaultSqlServer'",
+			"defaultValue": "Integrated Security=False;Encrypt=True;Connection Timeout=30;Data Source=tcp:synapsespectralcoredemo.sql.azuresynapse.net,1433;Initial Catalog=@{linkedService().DBName}"
+		},
+		"adls_spectralcore_properties_typeProperties_url": {
+			"type": "string",
+			"defaultValue": "https://adlsspectralcore.dfs.core.windows.net/"
+		},
+		"bing-covid-19-data_sasUri": {
+			"type": "secureString",
+			"metadata": "Secure string for 'sasUri' of 'bing-covid-19-data'"
+		},
+		"synapsespectralcoredemo-WorkspaceDefaultStorage_properties_typeProperties_url": {
+			"type": "string",
+			"defaultValue": "https://adlssynapsesameerkul.dfs.core.windows.net"
+		}
+	},
+	"variables": {
+		"workspaceId": "[concat('Microsoft.Synapse/workspaces/', parameters('workspaceName'))]"
+	},
+	"resources": [
+		{
+			"name": "[concat(parameters('workspaceName'), '/ingestion_adls')]",
+			"type": "Microsoft.Synapse/workspaces/pipelines",
+			"apiVersion": "2019-06-01-preview",
+			"properties": {
+				"activities": [
+					{
+						"name": "Lookup_config_table",
+						"type": "Lookup",
+						"dependsOn": [],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"source": {
+								"type": "SqlPoolSource",
+								"sqlReaderQuery": "select * from mtd.config_table where enable_flag = 1",
+								"queryTimeout": "02:00:00"
+							},
+							"dataset": {
+								"referenceName": "target_table_pool",
+								"type": "DatasetReference",
+								"parameters": {
+									"table_name": "config_table",
+									"schema_name": "mtd"
+								}
+							},
+							"firstRowOnly": false
+						}
+					},
+					{
+						"name": "ForEach1",
+						"type": "ForEach",
+						"dependsOn": [
+							{
+								"activity": "Lookup_config_table",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"items": {
+								"value": "@activity('Lookup_config_table').output.value",
+								"type": "Expression"
+							},
+							"activities": [
+								{
+									"name": "copy_data_adls_synapse",
+									"type": "Copy",
+									"dependsOn": [],
+									"policy": {
+										"timeout": "0.12:00:00",
+										"retry": 0,
+										"retryIntervalInSeconds": 30,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"source": {
+											"type": "DelimitedTextSource",
+											"storeSettings": {
+												"type": "AzureBlobFSReadSettings",
+												"recursive": true,
+												"enablePartitionDiscovery": false
+											},
+											"formatSettings": {
+												"type": "DelimitedTextReadSettings"
+											}
+										},
+										"sink": {
+											"type": "SqlPoolSink",
+											"writeBehavior": "Insert",
+											"sqlWriterUseTableLock": false,
+											"tableOption": "autoCreate"
+										},
+										"enableStaging": false,
+										"translator": {
+											"type": "TabularTranslator",
+											"typeConversion": true,
+											"typeConversionSettings": {
+												"allowDataTruncation": true,
+												"treatBooleanAsNumber": false
+											}
+										}
+									},
+									"inputs": [
+										{
+											"referenceName": "sample_dataset_adls",
+											"type": "DatasetReference",
+											"parameters": {
+												"file_name": {
+													"value": "@item().source_file_name",
+													"type": "Expression"
+												}
+											}
+										}
+									],
+									"outputs": [
+										{
+											"referenceName": "target_table_pool",
+											"type": "DatasetReference",
+											"parameters": {
+												"table_name": {
+													"value": "@item().target_table_name",
+													"type": "Expression"
+												},
+												"schema_name": {
+													"value": "@item().target_schema_name",
+													"type": "Expression"
+												}
+											}
+										}
+									]
+								}
+							]
+						}
+					}
+				],
+				"policy": {
+					"elapsedTimeMetric": {}
+				},
+				"annotations": [],
+				"lastPublishTime": "2025-12-02T14:20:54Z"
+			},
+			"dependsOn": [
+				"[concat(variables('workspaceId'), '/datasets/target_table_pool')]",
+				"[concat(variables('workspaceId'), '/datasets/sample_dataset_adls')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('workspaceName'), '/sample_dataset_adls')]",
+			"type": "Microsoft.Synapse/workspaces/datasets",
+			"apiVersion": "2019-06-01-preview",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "adls_spectralcore",
+					"type": "LinkedServiceReference"
+				},
+				"parameters": {
+					"file_name": {
+						"type": "string"
+					}
+				},
+				"annotations": [],
+				"type": "DelimitedText",
+				"typeProperties": {
+					"location": {
+						"type": "AzureBlobFSLocation",
+						"fileName": {
+							"value": "@dataset().file_name",
+							"type": "Expression"
+						},
+						"fileSystem": "synapsedata"
+					},
+					"columnDelimiter": ",",
+					"escapeChar": "\\",
+					"firstRowAsHeader": true,
+					"quoteChar": "\""
+				},
+				"schema": [
+					{
+						"name": "Index",
+						"type": "String"
+					},
+					{
+						"name": "Customer Id",
+						"type": "String"
+					},
+					{
+						"name": "First Name",
+						"type": "String"
+					},
+					{
+						"name": "Last Name",
+						"type": "String"
+					},
+					{
+						"name": "Company",
+						"type": "String"
+					},
+					{
+						"name": "City",
+						"type": "String"
+					},
+					{
+						"name": "Country",
+						"type": "String"
+					},
+					{
+						"name": "Phone 1",
+						"type": "String"
+					},
+					{
+						"name": "Phone 2",
+						"type": "String"
+					},
+					{
+						"name": "Email",
+						"type": "String"
+					},
+					{
+						"name": "Subscription Date",
+						"type": "String"
+					},
+					{
+						"name": "Website",
+						"type": "String"
+					}
+				]
+			},
+			"dependsOn": [
+				"[concat(variables('workspaceId'), '/linkedServices/adls_spectralcore')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('workspaceName'), '/target_table_pool')]",
+			"type": "Microsoft.Synapse/workspaces/datasets",
+			"apiVersion": "2019-06-01-preview",
+			"properties": {
+				"parameters": {
+					"table_name": {
+						"type": "string"
+					},
+					"schema_name": {
+						"type": "string"
+					}
+				},
+				"annotations": [],
+				"type": "SqlPoolTable",
+				"schema": [],
+				"typeProperties": {
+					"schema": {
+						"value": "@dataset().schema_name",
+						"type": "Expression"
+					},
+					"table": {
+						"value": "@dataset().table_name",
+						"type": "Expression"
+					}
+				},
+				"sqlPool": {
+					"referenceName": "synapsededipool",
+					"type": "SqlPoolReference"
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('workspaceId'), '/sqlPools/synapsededipool')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('workspaceName'), '/adls_spectralcore')]",
+			"type": "Microsoft.Synapse/workspaces/linkedServices",
+			"apiVersion": "2019-06-01-preview",
+			"properties": {
+				"annotations": [],
+				"type": "AzureBlobFS",
+				"typeProperties": {
+					"url": "[parameters('adls_spectralcore_properties_typeProperties_url')]",
+					"accountKey": {
+						"type": "SecureString",
+						"value": "[parameters('adls_spectralcore_accountKey')]"
+					}
+				},
+				"connectVia": {
+					"referenceName": "AutoResolveIntegrationRuntime",
+					"type": "IntegrationRuntimeReference"
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('workspaceId'), '/integrationRuntimes/AutoResolveIntegrationRuntime')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('workspaceName'), '/bing-covid-19-data')]",
+			"type": "Microsoft.Synapse/workspaces/linkedServices",
+			"apiVersion": "2019-06-01-preview",
+			"properties": {
+				"annotations": [],
+				"type": "AzureBlobStorage",
+				"typeProperties": {
+					"sasUri": "[parameters('bing-covid-19-data_sasUri')]"
+				}
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('workspaceName'), '/synapsespectralcoredemo-WorkspaceDefaultSqlServer')]",
+			"type": "Microsoft.Synapse/workspaces/linkedServices",
+			"apiVersion": "2019-06-01-preview",
+			"properties": {
+				"parameters": {
+					"DBName": {
+						"type": "String"
+					}
+				},
+				"annotations": [],
+				"type": "AzureSqlDW",
+				"typeProperties": {
+					"connectionString": "[parameters('synapsespectralcoredemo-WorkspaceDefaultSqlServer_connectionString')]"
+				},
+				"connectVia": {
+					"referenceName": "AutoResolveIntegrationRuntime",
+					"type": "IntegrationRuntimeReference"
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('workspaceId'), '/integrationRuntimes/AutoResolveIntegrationRuntime')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('workspaceName'), '/synapsespectralcoredemo-WorkspaceDefaultStorage')]",
+			"type": "Microsoft.Synapse/workspaces/linkedServices",
+			"apiVersion": "2019-06-01-preview",
+			"properties": {
+				"annotations": [],
+				"type": "AzureBlobFS",
+				"typeProperties": {
+					"url": "[parameters('synapsespectralcoredemo-WorkspaceDefaultStorage_properties_typeProperties_url')]"
+				},
+				"connectVia": {
+					"referenceName": "AutoResolveIntegrationRuntime",
+					"type": "IntegrationRuntimeReference"
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('workspaceId'), '/integrationRuntimes/AutoResolveIntegrationRuntime')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('workspaceName'), '/AutoResolveIntegrationRuntime')]",
+			"type": "Microsoft.Synapse/workspaces/integrationRuntimes",
+			"apiVersion": "2019-06-01-preview",
+			"properties": {
+				"type": "Managed",
+				"typeProperties": {
+					"computeProperties": {
+						"location": "AutoResolve",
+						"dataFlowProperties": {
+							"computeType": "General",
+							"coreCount": 8,
+							"timeToLive": 0
+						}
+					}
+				}
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('workspaceName'), '/WorkspaceSystemIdentity')]",
+			"type": "Microsoft.Synapse/workspaces/credentials",
+			"apiVersion": "2019-06-01-preview",
+			"properties": {
+				"type": "ManagedIdentity",
+				"typeProperties": {}
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('workspaceName'), '/SQL script 1')]",
+			"type": "Microsoft.Synapse/workspaces/sqlscripts",
+			"apiVersion": "2019-06-01-preview",
+			"properties": {
+				"content": {
+					"query": "-- Drop the table if it exists\nIF OBJECT_ID('dbo.demo_table_1') IS NOT NULL\n    DROP TABLE dbo.demo_table_1;\nGO\n\n-- Create the table using CTAS (CREATE TABLE AS SELECT)\nCREATE TABLE dbo.demo_table_1\nWITH\n(\n    DISTRIBUTION = ROUND_ROBIN,\n    HEAP\n)\nAS\nSELECT TOP (10000000)\n    ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS id,\n    ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) * 10 AS col_int,\n    (ROW_NUMBER() OVER (ORDER BY (SELECT NULL))) % 32767 AS col_smallint,\n    CAST(ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) * 1.1 AS DECIMAL(10,2)) AS col_dec,\n    CONCAT('name_', ROW_NUMBER() OVER (ORDER BY (SELECT NULL))) AS col_vc,\n    CASE WHEN (ROW_NUMBER() OVER (ORDER BY (SELECT NULL))) % 2 = 0 THEN 'Y' ELSE 'N' END AS col_flag,\n    DATEADD(DAY, ROW_NUMBER() OVER (ORDER BY (SELECT NULL)), '2000-01-01') AS col_date,\n    DATEADD(SECOND, ROW_NUMBER() OVER (ORDER BY (SELECT NULL)), '2000-01-01T00:00:00') AS col_dt,\n    (ROW_NUMBER() OVER (ORDER BY (SELECT NULL))) * 100 AS col_bigint,\n    GETDATE() AS col_datetime\nFROM sys.all_objects AS a\nCROSS JOIN sys.all_objects AS b;\nGO\n",
+					"metadata": {
+						"language": "sql"
+					},
+					"currentConnection": {
+						"databaseName": "synapsededipool",
+						"poolName": "synapsededipool"
+					},
+					"resultLimit": 5000
+				},
+				"type": "SqlQuery"
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('workspaceName'), '/SQL script 2')]",
+			"type": "Microsoft.Synapse/workspaces/sqlscripts",
+			"apiVersion": "2019-06-01-preview",
+			"properties": {
+				"content": {
+					"query": "SELECT top 100*\n FROM [dbo].[demo_table_5]",
+					"metadata": {
+						"language": "sql"
+					},
+					"currentConnection": {
+						"databaseName": "synapsededipool",
+						"poolName": "synapsededipool"
+					},
+					"resultLimit": 5000
+				},
+				"type": "SqlQuery"
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('workspaceName'), '/SQL script 3')]",
+			"type": "Microsoft.Synapse/workspaces/sqlscripts",
+			"apiVersion": "2019-06-01-preview",
+			"properties": {
+				"content": {
+					"query": "CREATE TABLE [mtd].[config_table]\n(\n    source_file_name VARCHAR(200) NOT NULL,\n    target_schema_name VARCHAR(50) NOT NULL,\n    target_table_name VARCHAR(50) NOT NULL,\n    enable_flag BIT NOT NULL\n)\nGO\n\nINSERT INTO [mtd].[config_table] \n(\n    source_file_name, \n    target_schema_name, \n    target_table_name, \n    enable_flag\n)\nSELECT 'customers-1000.csv','adls','customers',1 UNION ALL\nSELECT 'leads-1000.csv','adls','leads',1 UNION ALL\nSELECT 'organizations-1000.csv','adls','organizations',1 UNION ALL\nSELECT 'people-1000.csv','adls','people',1;\n\n\n",
+					"metadata": {
+						"language": "sql"
+					},
+					"currentConnection": {
+						"databaseName": "synapsededipool",
+						"poolName": "synapsededipool"
+					},
+					"resultLimit": 5000
+				},
+				"type": "SqlQuery"
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('workspaceName'), '/SQL script 4')]",
+			"type": "Microsoft.Synapse/workspaces/sqlscripts",
+			"apiVersion": "2019-06-01-preview",
+			"properties": {
+				"content": {
+					"query": "INSERT INTO [mtd].[config_table] \n(\n    source_file_name, \n    target_schema_name, \n    target_table_name, \n    enable_flag\n)\nSELECT 'customers-1000.csv','adls','customers',1 UNION ALL\nSELECT 'leads-1000.csv','adls','leads',1 UNION ALL\nSELECT 'organizations-1000.csv','adls','organizations',1 UNION ALL\nSELECT 'people-1000.csv','adls','people',1;\n",
+					"metadata": {
+						"language": "sql"
+					},
+					"currentConnection": {
+						"databaseName": "synapsededipool",
+						"poolName": "synapsededipool"
+					},
+					"resultLimit": 5000
+				},
+				"type": "SqlQuery"
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('workspaceName'), '/dummy_data_generator')]",
+			"type": "Microsoft.Synapse/workspaces/sqlscripts",
+			"apiVersion": "2019-06-01-preview",
+			"properties": {
+				"content": {
+					"query": "-- Drop if exists\nIF OBJECT_ID('dbo.demo_table_5') IS NOT NULL\n    DROP TABLE dbo.demo_table_5;\nGO\n\n-- Create 10 million dummy rows\nCREATE TABLE dbo.demo_table_5\nWITH\n(\n    DISTRIBUTION = ROUND_ROBIN,\n    HEAP\n)\nAS\nWITH Numbers AS (\n    SELECT TOP (10000)\n        ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS n\n    FROM sys.all_objects\n)\nSELECT TOP (20000000)\n    ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS id,\n    ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) * 10 AS col_int,\n    (ROW_NUMBER() OVER (ORDER BY (SELECT NULL))) % 32767 AS col_smallint,\n    CAST(ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) * 1.1 AS DECIMAL(10,2)) AS col_dec,\n    CONCAT('name_', ROW_NUMBER() OVER (ORDER BY (SELECT NULL))) AS col_vc,\n    CASE WHEN (ROW_NUMBER() OVER (ORDER BY (SELECT NULL))) % 2 = 0 THEN 'Y' ELSE 'N' END AS col_flag,\n    '2000-01-01' AS col_date,\n    '2000-01-01T00:00:00' AS col_dt,\n    (ROW_NUMBER() OVER (ORDER BY (SELECT NULL))) * 100 AS col_bigint,\n    GETDATE() AS col_datetime\nFROM Numbers AS a\nCROSS JOIN Numbers AS b\nCROSS JOIN Numbers AS c;\nGO\n",
+					"metadata": {
+						"language": "sql"
+					},
+					"currentConnection": {
+						"databaseName": "synapsededipool",
+						"poolName": "synapsededipool"
+					},
+					"resultLimit": 5000
+				},
+				"type": "SqlQuery"
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('workspaceName'), '/synapsededipool')]",
+			"type": "Microsoft.Synapse/workspaces/sqlPools",
+			"apiVersion": "2019-06-01-preview",
+			"properties": {
+				"collation": "SQL_Latin1_General_CP1_CI_AS",
+				"maxSizeBytes": 263882790666240,
+				"annotations": []
+			},
+			"dependsOn": [],
+			"location": "westus3"
+		}
+	]
+}
